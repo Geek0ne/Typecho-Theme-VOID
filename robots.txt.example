@@ -1,0 +1,18 @@
+# robots.txt — VOID 主题模板
+#
+# 用法：把本文件复制到 Typecho 根目录（与 index.php 同级），并把
+# Sitemap 地址改为你的实际主题路径。若主题目录名不是 VOID，请相应调整。
+
+User-agent: *
+Allow: /
+
+# 搜索结果页不需要被索引（避免重复内容）
+Disallow: /search/
+Disallow: /*?keyword=
+
+# 主题自带 sitemap；若未复制到根目录，请注释掉本行
+Sitemap: /usr/themes/VOID/sitemap.php
+
+# 可选：屏蔽后台与动作入口
+Disallow: /admin/
+Disallow: /action/

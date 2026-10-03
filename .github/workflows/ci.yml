@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  php-lint:
+    name: PHP syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, json
+          coverage: none
+
+      - name: Lint all PHP files
+        run: |
+          set -e
+          fail=0
+          while IFS= read -r -d '' f; do
+            if ! out=$(php -l "$f" 2>&1); then
+              echo "::error file=${f}::${out}"
+              fail=1
+            fi
+          done < <(find . -name '*.php' -not -path './.git/*' -print0)
+          exit $fail
+
+      - name: Guard against unescaped output of user-controlled fields
+        run: |
+          # banner / excerpt / twitterId / brandFont 直接进入 HTML 属性时必须转义。
+          # 这里只做粗筛，真正判断仍需人工复核。
+          if grep -rnE 'echo \$this->fields->(banner|excerpt)\s*;' \
+               --include='*.php' . ; then
+            echo "::error::unescaped user field found — wrap it in Utils::esc()"
+            exit 1
+          fi
+          echo "no raw field output detected"
+
+      - name: Verify the esc() helper exists
+        run: |
+          grep -q 'function esc' libs/Utils.php \
+            || { echo "::error::Utils::esc() is missing"; exit 1; }
+          echo "Utils::esc() present"
+
+  security-headers:
+    name: Security headers shipped
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: .htaccess must define the core headers
+        run: |
+          for h in X-Frame-Options X-Content-Type-Options Referrer-Policy Content-Security-Policy; do
+            grep -q "$h" .htaccess || { echo "::error::$h missing from .htaccess"; exit 1; }
+          done
+          echo "all core headers present"
+
+  seo:
+    name: SEO tags present
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: canonical and og tags must exist
+        run: |
+          grep -q 'rel="canonical"' includes/head.php || { echo "::error::canonical missing"; exit 1; }
+          grep -q 'og:locale'        includes/head.php || { echo "::error::og:locale missing"; exit 1; }
+          grep -q 'og:image:alt'     includes/head.php || { echo "::error::og:image:alt missing"; exit 1; }
+          echo "SEO tags present"
+
+  build:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Build assets
+        run: npm run build

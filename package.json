@@ -1,0 +1,28 @@
+{
+  "name": "typecho-theme-void",
+  "version": "3.52.0",
+  "description": "VOID — a Typecho theme, security-hardened and modernised",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "build": "gulp build",
+    "watch": "gulp watch",
+    "lint": "eslint assets/src --ext .js || true",
+    "lint:php": "find . -name '*.php' -not -path './.git/*' -print0 | xargs -0 -n1 php -l | grep -v 'No syntax errors' || true"
+  },
+  "devDependencies": {
+    "del": "^7.1.0",
+    "eslint": "^8.57.0",
+    "gulp": "^5.0.0",
+    "gulp-autoprefixer": "^9.0.0",
+    "gulp-clean-css": "^4.3.0",
+    "gulp-concat": "^2.6.1",
+    "gulp-rev": "^9.0.0",
+    "gulp-rev-collector": "^1.4.1",
+    "gulp-sass": "^6.0.0",
+    "gulp-uglify": "^3.0.2",
+    "jsonfile": "^6.1.0",
+    "sass": "^1.77.0",
+    "pre-commit": "^1.2.2"
+  }
+}

@@ -1,0 +1,86 @@
+# VOID 主题安全响应头配置
+#
+# 本文件由 Typecho 主题自带，用于 Apache 环境。
+# Nginx 用户请参考 README 中的等价配置。
+#
+# 说明：
+#   CSP 默认较为宽松，站点若使用第三方评论、统计、外链脚本，
+#   请按注释逐项放开，而不是直接删掉整条策略。
+
+# ---------- Apache 2.2 / 2.4 通用 ----------
+
+# 禁止 iframe 嵌套（点击劫持防护）。允许同源嵌套，避免破坏后台预览。
+<IfModule mod_headers.c>
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=(), interest-cohort=()"
+
+    # 传输层安全。启用前请确认站点已全站 HTTPS，否则会导致资源加载失败。
+    # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+    # 移除暴露技术栈的响应头
+    Header unset X-Powered-By
+    Header always unset Server
+</IfModule>
+
+# ---------- 内容安全策略 ----------
+#
+# 默认策略以同源为主。若需接入第三方资源，按需追加 'https://...' 来源。
+#   script-src : 主题自身脚本；MathJax/KaTeX 需加 CDN
+#   style-src  : 内联样式已在 theme 设置中允许（unsafe-inline）
+#   img-src    : 图片上传与外链封面
+#   frame-src  : 第三方评论（如 Waline、GitHub）
+#
+<IfModule mod_headers.c>
+    <FilesMatch "\.(php|html)$">
+        Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://polyfill.io https://unpkg.com https://cdn.bootcdn.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdn.bootcdn.net; font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https:; connect-src 'self' https:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+    </FilesMatch>
+</IfModule>
+
+# ---------- 目录保护 ----------
+
+# 禁止列出目录
+Options -Indexes
+
+# 禁止访问主题目录下的开发/配置文件
+<FilesMatch "\.(md|json|lock|log|gitignore|gulpfile\.js)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# 禁止访问隐藏文件与备份残留
+<FilesMatch "^\.|~$|\.bak$|\.old$|\.orig$|\.swp$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# ---------- 静态资源缓存 ----------
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css                "access plus 1 year"
+    ExpiresByType application/javascript  "access plus 1 year"
+    ExpiresByType image/jpeg              "access plus 1 year"
+    ExpiresByType image/png               "access plus 1 year"
+    ExpiresByType image/webp              "access plus 1 year"
+    ExpiresByType image/svg+xml           "access plus 1 year"
+    ExpiresByType font/woff2              "access plus 1 year"
+    ExpiresDefault                        "access plus 1 week"
+</IfModule>
+
+# ---------- 压缩 ----------
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/plain
+    AddOutputFilterByType DEFLATE application/javascript application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
