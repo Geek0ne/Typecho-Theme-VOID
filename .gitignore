@@ -1,9 +1,16 @@
-node_modules/*
-temp/*
-build/*
+# 依赖与构建产物
+node_modules/
+temp/
+build/
 build.zip
+npm-debug.log*
+yarn-error.log*
+
+# 打包后的合并文件（由 npm run build 生成）
 assets/bundle*.js
 assets/bundle*.css
 assets/VOID*.css
 assets/VOID*.css.map
+
 .DS_Store
+*.swp
