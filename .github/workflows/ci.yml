@@ -78,13 +78,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Node 20 ships npm 10.8.2, which intermittently aborts with
+      # "Exit handler never called!" on this dependency tree. Node 22
+      # carries npm 10.9.x, where the failure does not reproduce.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: npm
+          node-version: '22'
+
+      # The npm cache is disabled for the same reason: the abort happens
+      # while npm is reading and writing its cacache store. Pointing the
+      # cache at a path inside the workspace (rather than /dev/null, which
+      # npm cannot create subdirectories under) keeps it writable while
+      # still isolating it from the runner's shared cache.
+      - name: Disable the npm cache
+        run: |
+          echo "cache=$(pwd)/.npm-cache" >> "$GITHUB_ENV"
+          mkdir -p "$(pwd)/.npm-cache"
 
       - name: Install dependencies
-        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Build assets
         run: npm run build
