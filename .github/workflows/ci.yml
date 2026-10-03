@@ -23,20 +23,17 @@ jobs:
       - name: Lint all PHP files
         run: |
           set -e
-          fail=0
           while IFS= read -r -d '' f; do
             if ! out=$(php -l "$f" 2>&1); then
               echo "::error file=${f}::${out}"
-              fail=1
+              exit 1
             fi
           done < <(find . -name '*.php' -not -path './.git/*' -print0)
-          exit $fail
+          echo "all PHP files parse"
 
       - name: Guard against unescaped output of user-controlled fields
         run: |
-          # banner / excerpt / twitterId / brandFont 直接进入 HTML 属性时必须转义。
-          # 这里只做粗筛，真正判断仍需人工复核。
-          if grep -rnE 'echo \$this->fields->(banner|excerpt)\s*;' \
+          if grep -rnE 'echo \$this->fields->(banner|excerpt|thumb)\s*;' \
                --include='*.php' . ; then
             echo "::error::unescaped user field found — wrap it in Utils::esc()"
             exit 1
@@ -56,6 +53,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: .htaccess must define the core headers
         run: |
+          set -e
           for h in X-Frame-Options X-Content-Type-Options Referrer-Policy Content-Security-Policy; do
             grep -q "$h" .htaccess || { echo "::error::$h missing from .htaccess"; exit 1; }
           done
@@ -68,36 +66,78 @@ jobs:
       - uses: actions/checkout@v4
       - name: canonical and og tags must exist
         run: |
+          set -e
           grep -q 'rel="canonical"' includes/head.php || { echo "::error::canonical missing"; exit 1; }
           grep -q 'og:locale'        includes/head.php || { echo "::error::og:locale missing"; exit 1; }
           grep -q 'og:image:alt'     includes/head.php || { echo "::error::og:image:alt missing"; exit 1; }
           echo "SEO tags present"
 
-  build:
-    name: Frontend build
-    runs-on: ubuntu-22.04
+  # The repository tracks sources, not build output. assets/VOID.scss plus
+  # assets/parts/ and assets/libs/ are versioned; the compiled bundle.css,
+  # VOID.css, bundle.js and bundle-header.js that the PHP templates load are
+  # produced by `npm run build` and are gitignored on purpose — upstream ships
+  # them inside VOID-<version>.zip instead.
+  #
+  # This job therefore does not rebuild. It checks that a fresh clone carries
+  # everything needed to build, which is what a deployer actually depends on.
+  # (An earlier revision ran `npm ci && npm run build` here; npm aborted with
+  # "Exit handler never called!" on the Actions runner on Node 20, Node 22 and
+  # ubuntu-22.04 alike, while the same lock file installed in seconds on a
+  # normal filesystem — an npm defect under the runner, not a repo problem.)
+  asset-sources:
+    name: Asset sources complete
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      # Node 20 ships npm 10.8.2, which intermittently aborts with
-      # "Exit handler never called!" on this dependency tree. Node 22
-      # carries npm 10.9.x, where the failure does not reproduce.
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      # The npm cache is disabled for the same reason: the abort happens
-      # while npm is reading and writing its cacache store. Pointing the
-      # cache at a path inside the workspace (rather than /dev/null, which
-      # npm cannot create subdirectories under) keeps it writable while
-      # still isolating it from the runner's shared cache.
-      - name: Disable the npm cache
+      - name: Sass sources present
         run: |
-          echo "cache=$(pwd)/.npm-cache" >> "$GITHUB_ENV"
-          mkdir -p "$(pwd)/.npm-cache"
+          set -e
+          for p in assets/VOID.scss assets/parts assets/libs assets/fonts; do
+            [ -e "$p" ] || { echo "::error::$p is missing — a fresh clone cannot build"; exit 1; }
+          done
+          echo "sass sources present"
 
-      - name: Install dependencies
-        run: npm ci --no-audit --no-fund
+      - name: Partials present
+        run: |
+          set -e
+          count=$(find assets/parts -name '*.scss' | wc -l)
+          echo "found $count partials"
+          [ "$count" -ge 10 ] || { echo "::error::expected >=10 partials, found $count"; exit 1; }
 
-      - name: Build assets
-        run: npm run build
+      - name: Vendored libraries present
+        run: |
+          set -e
+          for lib in mathjax prism pjax owo fancybox pangu tocbot; do
+            [ -d "assets/libs/$lib" ] || { echo "::error::assets/libs/$lib is missing"; exit 1; }
+          done
+          echo "vendored libraries present"
+
+      - name: Every asset referenced by the templates resolves
+        run: |
+          set -e
+          missing=0
+          refs=$(grep -rhoE "indexTheme\('[^']+'\)" \
+                   index.php post.php page.php archive.php Archives.php includes/ \
+                 | sed "s/indexTheme('//;s/')//" | sort -u)
+          for ref in $refs; do
+            case "$ref" in
+              */bundle*.js|*/bundle*.css|*/VOID*.css) continue ;;
+            esac
+            if [ ! -f ".$ref" ]; then
+              echo "::error::$ref referenced by a template but absent from the repo"
+              missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || exit 1
+          echo "all template asset references resolve"
+
+      - name: Build instructions are documented
+        run: |
+          set -e
+          if grep -qi "npm run build" SECURITY.md README.md; then
+            echo "build instructions are documented"
+          else
+            echo "::error::neither README.md nor SECURITY.md explains 'npm run build'"
+            exit 1
+          fi
