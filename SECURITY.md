@@ -101,12 +101,26 @@ location ~ /\.(?!well-known) { deny all; }
 
 ## 从源码构建
 
+**仓库不包含编译后的资源。** `index.php` 等模板会引用
+`assets/bundle.css`、`assets/VOID.css`、`assets/bundle.js`、
+`assets/bundle-header.js`，这四个文件是 `npm run build` 的产物，
+被 `.gitignore` 排除——上游也是同样的做法，改由 Release 的
+`VOID-<版本>.zip` 分发。
+
+所以**直接 clone 是无法直接部署的**，请先构建：
+
 ```bash
 npm install
 npm run build
 ```
 
-`node-sass` 已移除，**无需 Python 或编译工具链**。
+`node-sass` 已替换为 dart-sass，**无需 Python 或原生编译工具链**。
+
+或者直接取 Release 里的成品包：
+
+```bash
+wget https://github.com/AlanDecode/Typecho-Theme-VOID/releases/download/3.51/VOID-3.5.1.zip
+```
 
 ---
 
